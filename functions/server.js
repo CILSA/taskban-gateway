@@ -1,47 +1,58 @@
+// gateway.js
 import express from "express";
 import cors from "cors";
 import serverless from "serverless-http";
-import { getCertificates } from "./MOCK-CERTIFICATES.js";
-import { getListings, getListingById, getListingCompare } from "./MOCK-LISTINGS.js";
+import axios from "axios";
 
 const app = express();
 app.use(cors());
 
 const router = express.Router();
 
-router.get("/certs", (req, res) => {
-  res.json(getCertificates());
-});
+// URLs de los servicios internos
+const tasksServiceUrl = 'https://taskban-task.netlify.app/.netlify/functions/server/tasks';
+const boardsServiceUrl = 'https://taskban-boards.netlify.app/.netlify/functions/server/boards';
 
-router.get("/listings", (req, res) => {
-  const listings = getListings();
-  const { id } = req.query;
-
-  // Verificar si hay un ID en los query params
-  if (id) {
-    const listing = getListingById(Number(id));
-    if (listing) {
-      res.json(listing);
-    } else {
-      res.status(404).json({ message: "Listing not found" });
+// Ruta para obtener tareas por ID del tablero a través del gateway
+router.get("/tasks", async (req, res) => {
+  try {
+    const { boardId } = req.query;
+    if (!boardId) {
+      return res.status(400).json({ message: "Board ID is required" });
     }
-  } else {
-    // Si no hay ID, devolver todos los listings
-    res.json(listings);
+
+    // Llamar al servicio de tareas
+    const response = await axios.get(tasksServiceUrl, { params: { boardId } });
+    res.json(response.data);
+  } catch (error) {
+    console.error("Error fetching tasks:", error);
+    res.status(500).json({ message: "Error fetching tasks" });
   }
 });
 
+// Ruta para obtener todos los boards a través del gateway
+router.get("/boards", async (req, res) => {
+  try {
+    // Llamar al servicio de boards
+    const response = await axios.get(boardsServiceUrl);
+    res.json(response.data);
+  } catch (error) {
+    console.error("Error fetching boards:", error);
+    res.status(500).json({ message: "Error fetching boards" });
+  }
+});
 
-router.get("/compare", (req, res) => {
-  const ids = req.query.ids;
-
-  // Convierte `ids` a un array de números
-  const idsArray = ids ? ids.split(',').map(Number) : [];
-
-  // Obtiene los listings que coinciden con los IDs pasados
-  const listingsToCompare = getListingCompare(idsArray);
-
-  res.json(listingsToCompare);
+// Ruta para obtener un board por ID a través del gateway
+router.get("/boards/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Llamar al servicio de boards
+    const response = await axios.get(`${boardsServiceUrl}/${id}`);
+    res.json(response.data);
+  } catch (error) {
+    console.error("Error fetching board:", error);
+    res.status(500).json({ message: "Error fetching board" });
+  }
 });
 
 // Iniciar servidor en el contexto de Netlify Functions
